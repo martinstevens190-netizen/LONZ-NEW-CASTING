@@ -1,23 +1,50 @@
-# LinkCast Netlify package
+# LinkCast — Netlify + Google Cast fix
 
-This package is ready to upload directly to Netlify.
+This package is the web sender app plus the custom receiver page.
 
-## Important
+## Important setup
 
-Use this package for Netlify:
-- `index.html` is at the root
-- `receiver.html` is at the root
-- `_redirects` and `netlify.toml` are included
+Your current Google Cast Application ID is:
 
-## Upload to Netlify
+- `7A03A2F5`
 
-1. Open Netlify.
-2. Choose **Add new site** -> **Deploy manually**.
-3. Drag **linkcast-netlify.zip** into Netlify.
-4. Open the generated site URL.
+Your Cast console receiver URL must be:
 
-## Notes
+- `https://stately-cocada-84b9b2.netlify.app/receiver.html`
 
-- If you upload the old `linkcast-native.zip`, Netlify will show a 404 because that file is native Android/iPhone source code, not a website.
-- The web app will open correctly from this package.
-- Real Cast device selection from a website still depends on a Cast-supported browser, HTTPS, and a valid Google Cast receiver app ID.
+Do **not** leave the receiver URL as just the root site URL if you want the custom receiver page to launch correctly.
+
+## Why the cast chooser was failing
+
+The earlier web app could miss the Google Cast SDK availability callback because of script loading order.
+This fixed build loads the Cast SDK after the callback is registered.
+
+## Unpublished receiver testing
+
+Because your receiver is **Unpublished**, you must:
+
+1. Add your Chromecast / Google TV / Android TV device in the Google Cast Developer Console
+2. Wait about 15 minutes
+3. Reboot the Cast device
+4. Keep the sender device and Cast device on the same Wi‑Fi network
+
+## Supported web sender environments
+
+Best results:
+
+- Chrome on Mac / Windows
+- Chrome on Android
+
+Not supported for Google Cast Web Sender:
+
+- iPhone / iPad browsers
+
+## Netlify upload
+
+Upload this zip or folder to Netlify.
+
+Files included:
+
+- `index.html` = sender page
+- `receiver.html` = custom Cast receiver page
+

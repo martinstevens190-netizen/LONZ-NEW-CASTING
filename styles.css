@@ -88,7 +88,8 @@ button {
 }
 
 .icon-btn,
-.cast-icon-btn {
+.cast-icon-btn,
+.cast-launcher {
   border: 1px solid var(--border);
   background: rgba(255, 255, 255, 0.04);
   color: var(--text);
@@ -106,15 +107,22 @@ button {
   fill: currentColor;
 }
 
-.cast-icon-btn.ready {
+.cast-launcher {
+  --connected-color: #10b981;
+  --disconnected-color: #ffffff;
+  --connecting-color: #f59e0b;
+  cursor: pointer;
+}
+
+.cast-launcher.ready {
   color: #ffffff;
 }
 
-.cast-icon-btn.connecting {
+.cast-launcher.connecting {
   color: #f59e0b;
 }
 
-.cast-icon-btn.connected {
+.cast-launcher.connected {
   color: #10b981;
 }
 
@@ -190,7 +198,8 @@ input[type="text"]:focus {
 .secondary-btn:hover,
 .text-btn:hover,
 .icon-btn:hover,
-.cast-icon-btn:hover {
+.cast-icon-btn:hover,
+.cast-launcher:hover {
   transform: translateY(-1px);
 }
 
@@ -406,4 +415,87 @@ button:disabled {
     grid-column: 2;
     grid-row: 1 / span 3;
   }
+}
+
+
+.mini-note {
+  margin-top: 12px;
+  color: var(--muted);
+  font-size: 0.92rem;
+}
+
+.mini-note code {
+  background: rgba(255,255,255,0.06);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+
+.diagnostics-list {
+  display: grid;
+  gap: 10px;
+}
+
+.diag-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.03);
+}
+
+.diag-icon {
+  width: 1.25rem;
+  text-align: center;
+  font-weight: 700;
+}
+
+.diag-ok .diag-icon { color: #10b981; }
+.diag-warn .diag-icon { color: #f59e0b; }
+.diag-bad .diag-icon { color: #ef4444; }
+
+.receiver-shell {
+  min-height: 100vh;
+  background: #000;
+}
+
+.receiver-stage {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  background: radial-gradient(circle at top, rgba(239, 68, 68, 0.25), transparent 30%), #000;
+}
+
+#receiver-player,
+#receiver-player iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.receiver-waiting {
+  text-align: center;
+  z-index: 2;
+  padding: 24px;
+}
+
+.receiver-waiting h1 {
+  margin-bottom: 8px;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+}
+
+.receiver-waiting p {
+  color: rgba(255,255,255,0.75);
+  max-width: 600px;
+}
+
+.receiver-badge {
+  display: inline-block;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+  margin-bottom: 16px;
 }

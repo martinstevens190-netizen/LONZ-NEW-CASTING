@@ -8,11 +8,9 @@
     <link rel="manifest" href="manifest.webmanifest" />
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="styles.css" />
-    <script src="https://www.youtube.com/iframe_api"></script>
-    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async></script>
   </head>
   <body>
-    <div class="app-shell">
+    <div id="app-shell" class="app-shell">
       <header class="topbar">
         <div>
           <p class="eyebrow">YouTube link player</p>
@@ -49,7 +47,7 @@
             </div>
           </form>
 
-          <div id="status" class="status">Paste a valid YouTube link to begin.</div>
+          <div id="status" class="status">Loading app…</div>
         </section>
 
         <section class="card player-card">
@@ -79,7 +77,7 @@
             <span id="cast-state-pill" class="pill">Not connected</span>
           </div>
           <p class="muted">
-            Paste your Google Cast receiver app ID here so the Cast icon can open the device picker and send the current video.
+            Your Cast receiver ID is prefilled. If you change it later, save the new ID here before tapping the Cast icon.
           </p>
           <div class="input-stack">
             <label for="receiver-app-id" class="sr-only">Receiver App ID</label>
@@ -101,19 +99,28 @@
       </main>
     </div>
 
+    <div id="receiver-shell" class="receiver-shell hidden" aria-live="polite">
+      <div class="receiver-stage">
+        <div id="receiver-waiting" class="receiver-waiting">
+          <div class="receiver-badge">LinkCast Receiver</div>
+          <h1>Ready to receive a YouTube link</h1>
+          <p>Choose this device from the sender app, then send a video.</p>
+        </div>
+        <div id="receiver-player"></div>
+      </div>
+    </div>
+
     <dialog id="cast-help-dialog" class="dialog">
       <div class="dialog-inner">
         <h2>How casting works here</h2>
         <p>
-          Tap the Cast icon to open the device chooser. For that chooser to appear and actually send the video,
-          this app needs a real Google Cast receiver app ID and must be hosted on HTTPS.
+          Tap the Cast icon to open the device chooser. This web app works best in desktop Chrome on HTTPS.
         </p>
         <p>
-          Save your receiver app ID in the Cast setup area, then tap the Cast icon and pick a device.
-          After the connection starts, the current video is sent automatically.
+          Your receiver app ID is already prefilled. If your receiver is still unpublished, the TV or Chromecast must also be added as an authorized device in the Google Cast Developer Console and may need 5–15 minutes plus a reboot before testing.
         </p>
         <p>
-          If no device list appears, the browser or device likely does not support Cast for web apps, or no Cast devices are discoverable on the network.
+          This site now supports root receiver mode too, so the same Netlify root URL can act as the receiver when launched by Google Cast.
         </p>
         <button id="close-cast-help-btn" type="button" class="primary-btn">Close</button>
       </div>
