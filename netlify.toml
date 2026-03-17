@@ -1,0 +1,7 @@
+[build]
+  publish = "."
+
+[[redirects]]
+  from = "/receiver"
+  to = "/receiver.html"
+  status = 200

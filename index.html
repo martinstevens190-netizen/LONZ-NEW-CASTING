@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#111827" />
+    <title>LinkCast</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="https://www.youtube.com/iframe_api"></script>
+    <script src="https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1" async></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">YouTube link player</p>
+          <h1>LinkCast</h1>
+        </div>
+        <div class="topbar-actions">
+          <button id="cast-help-btn" class="icon-btn" type="button" title="Cast help" aria-label="Cast help">?</button>
+          <button id="cast-button" class="cast-icon-btn" type="button" title="Cast to device" aria-label="Cast to device">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path d="M1 18v3h3c0-1.66-1.34-3-3-3Zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7Zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.92-11-11-11Zm2 0V3h18v13h-8v2h8c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v7h2Z" />
+            </svg>
+          </button>
+        </div>
+      </header>
+
+      <main class="content">
+        <section class="card hero-card">
+          <h2>Paste a YouTube link</h2>
+          <p class="muted">Play videos directly inside the app when your device has internet access.</p>
+          <form id="player-form" class="input-stack">
+            <label for="youtube-url" class="sr-only">YouTube URL</label>
+            <input
+              id="youtube-url"
+              name="youtube-url"
+              type="url"
+              placeholder="https://www.youtube.com/watch?v=..."
+              autocomplete="off"
+              spellcheck="false"
+              required
+            />
+            <div class="actions-row">
+              <button type="submit" class="primary-btn">Play video</button>
+              <button id="open-youtube-btn" type="button" class="secondary-btn" disabled>Open in YouTube</button>
+            </div>
+          </form>
+
+          <div id="status" class="status">Paste a valid YouTube link to begin.</div>
+        </section>
+
+        <section class="card player-card">
+          <div class="player-wrap">
+            <div id="player-placeholder" class="placeholder">
+              <div class="placeholder-icon">▶</div>
+              <p>Your video will appear here.</p>
+            </div>
+            <div id="player"></div>
+          </div>
+
+          <div id="video-meta" class="video-meta hidden">
+            <div>
+              <p class="meta-label">Current video ID</p>
+              <p id="video-id-text" class="mono"></p>
+            </div>
+            <div class="meta-actions">
+              <button id="copy-link-btn" type="button" class="secondary-btn">Copy link</button>
+              <button id="cast-current-btn" type="button" class="primary-btn subtle">Cast current video</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card setup-card">
+          <div class="section-header tight">
+            <h2>Cast setup</h2>
+            <span id="cast-state-pill" class="pill">Not connected</span>
+          </div>
+          <p class="muted">
+            Paste your Google Cast receiver app ID here so the Cast icon can open the device picker and send the current video.
+          </p>
+          <div class="input-stack">
+            <label for="receiver-app-id" class="sr-only">Receiver App ID</label>
+            <input id="receiver-app-id" type="text" placeholder="Example: ABCD1234" maxlength="32" autocomplete="off" spellcheck="false" />
+            <div class="actions-row">
+              <button id="save-cast-id-btn" type="button" class="primary-btn">Save Cast ID</button>
+              <button id="clear-cast-id-btn" type="button" class="secondary-btn">Clear Cast ID</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="card history-card">
+          <div class="section-header">
+            <h2>Recent links</h2>
+            <button id="clear-history-btn" type="button" class="text-btn">Clear</button>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </section>
+      </main>
+    </div>
+
+    <dialog id="cast-help-dialog" class="dialog">
+      <div class="dialog-inner">
+        <h2>How casting works here</h2>
+        <p>
+          Tap the Cast icon to open the device chooser. For that chooser to appear and actually send the video,
+          this app needs a real Google Cast receiver app ID and must be hosted on HTTPS.
+        </p>
+        <p>
+          Save your receiver app ID in the Cast setup area, then tap the Cast icon and pick a device.
+          After the connection starts, the current video is sent automatically.
+        </p>
+        <p>
+          If no device list appears, the browser or device likely does not support Cast for web apps, or no Cast devices are discoverable on the network.
+        </p>
+        <button id="close-cast-help-btn" type="button" class="primary-btn">Close</button>
+      </div>
+    </dialog>
+
+    <script src="app.js"></script>
+  </body>
+</html>
