@@ -18,35 +18,22 @@
         </div>
         <div class="topbar-actions">
           <button id="cast-help-btn" class="icon-btn" type="button" title="Cast help" aria-label="Cast help">?</button>
-          <button id="cast-button" class="cast-icon-btn" type="button" title="Cast to device" aria-label="Cast to device">
-            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-              <path d="M1 18v3h3c0-1.66-1.34-3-3-3Zm0-4v2c2.76 0 5 2.24 5 5h2c0-3.87-3.13-7-7-7Zm0-4v2c4.97 0 9 4.03 9 9h2c0-6.08-4.92-11-11-11Zm2 0V3h18v13h-8v2h8c1.1 0 2-.9 2-2V3c0-1.1-.9-2-2-2H3c-1.1 0-2 .9-2 2v7h2Z" />
-            </svg>
-          </button>
+          <google-cast-launcher id="cast-launcher" class="cast-launcher-btn hidden"></google-cast-launcher>
         </div>
       </header>
 
       <main class="content">
         <section class="card hero-card">
           <h2>Paste a YouTube link</h2>
-          <p class="muted">Play videos directly inside the app when your device has internet access.</p>
+          <p class="muted">This version has the Cast App ID hardcoded and a diagnostics panel for troubleshooting.</p>
           <form id="player-form" class="input-stack">
             <label for="youtube-url" class="sr-only">YouTube URL</label>
-            <input
-              id="youtube-url"
-              name="youtube-url"
-              type="url"
-              placeholder="https://www.youtube.com/watch?v=..."
-              autocomplete="off"
-              spellcheck="false"
-              required
-            />
+            <input id="youtube-url" name="youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=..." autocomplete="off" spellcheck="false" required />
             <div class="actions-row">
               <button type="submit" class="primary-btn">Play video</button>
               <button id="open-youtube-btn" type="button" class="secondary-btn" disabled>Open in YouTube</button>
             </div>
           </form>
-
           <div id="status" class="status">Loading app…</div>
         </section>
 
@@ -58,7 +45,6 @@
             </div>
             <div id="player"></div>
           </div>
-
           <div id="video-meta" class="video-meta hidden">
             <div>
               <p class="meta-label">Current video ID</p>
@@ -73,20 +59,32 @@
 
         <section class="card setup-card">
           <div class="section-header tight">
-            <h2>Cast setup</h2>
-            <span id="cast-state-pill" class="pill">Not connected</span>
+            <h2>Cast app</h2>
+            <span id="cast-state-pill" class="pill">Loading</span>
           </div>
-          <p class="muted">
-            Your Cast receiver ID is prefilled. If you change it later, save the new ID here before tapping the Cast icon.
-          </p>
-          <div class="input-stack">
-            <label for="receiver-app-id" class="sr-only">Receiver App ID</label>
-            <input id="receiver-app-id" type="text" placeholder="Example: ABCD1234" maxlength="32" autocomplete="off" spellcheck="false" />
-            <div class="actions-row">
-              <button id="save-cast-id-btn" type="button" class="primary-btn">Save Cast ID</button>
-              <button id="clear-cast-id-btn" type="button" class="secondary-btn">Clear Cast ID</button>
-            </div>
+          <div class="diagnostics-grid compact">
+            <div><span class="diag-label">App ID</span><span id="diag-app-id" class="mono">—</span></div>
+            <div><span class="diag-label">Secure</span><span id="diag-secure" class="mono">—</span></div>
+            <div><span class="diag-label">Platform</span><span id="diag-platform" class="mono">—</span></div>
+            <div><span class="diag-label">Cast SDK</span><span id="diag-cast-api" class="mono">—</span></div>
           </div>
+          <p class="muted note-text">Important: Android TV / Google TV test devices must be registered with the Google Cast <strong>software (Cast) serial number</strong>, not the generic hardware/status serial number.</p>
+        </section>
+
+        <section class="card diagnostics-card">
+          <div class="section-header tight">
+            <h2>Diagnostics</h2>
+            <button id="clear-log-btn" type="button" class="text-btn">Clear log</button>
+          </div>
+          <div class="diagnostics-grid">
+            <div><span class="diag-label">Browser support</span><span id="diag-browser" class="mono">—</span></div>
+            <div><span class="diag-label">Online</span><span id="diag-online" class="mono">—</span></div>
+            <div><span class="diag-label">Cast state</span><span id="diag-cast-state" class="mono">—</span></div>
+            <div><span class="diag-label">Session state</span><span id="diag-session-state" class="mono">—</span></div>
+            <div><span class="diag-label">Page mode</span><span id="diag-page-mode" class="mono">—</span></div>
+            <div><span class="diag-label">Origin</span><span id="diag-origin" class="mono small">—</span></div>
+          </div>
+          <pre id="diag-log" class="diag-log">Starting diagnostics…</pre>
         </section>
 
         <section class="card history-card">
@@ -112,16 +110,10 @@
 
     <dialog id="cast-help-dialog" class="dialog">
       <div class="dialog-inner">
-        <h2>How casting works here</h2>
-        <p>
-          Tap the Cast icon to open the device chooser. This web app works best in desktop Chrome on HTTPS.
-        </p>
-        <p>
-          Your receiver app ID is already prefilled. If your receiver is still unpublished, the TV or Chromecast must also be added as an authorized device in the Google Cast Developer Console and may need 5–15 minutes plus a reboot before testing.
-        </p>
-        <p>
-          This site now supports root receiver mode too, so the same Netlify root URL can act as the receiver when launched by Google Cast.
-        </p>
+        <h2>Quick troubleshooting</h2>
+        <p>Use this build in desktop Chrome first. The diagnostics panel will tell you whether the Cast SDK loaded and whether Chrome sees any Cast devices.</p>
+        <p>If you are testing an unpublished app on Android TV / Google TV, make sure you registered the TV's Google Cast <strong>software serial number</strong>, not the generic hardware serial, then wait 15 minutes and reboot the TV.</p>
+        <p>If Cast state stays at <code>NO_DEVICES_AVAILABLE</code>, the issue is almost always browser support, sender/TV network mismatch, or the wrong device serial being registered.</p>
         <button id="close-cast-help-btn" type="button" class="primary-btn">Close</button>
       </div>
     </dialog>

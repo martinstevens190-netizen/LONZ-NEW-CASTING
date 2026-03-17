@@ -1,13 +1,10 @@
 const CAST_NAMESPACE = 'urn:x-cast:com.linkcast.youtube';
 const HISTORY_KEY = 'linkcast-history-v1';
-const CAST_ID_KEY = 'linkcast-cast-app-id-v1';
-const DEFAULT_CAST_APP_ID = '7A03A2F5';
-
+const CAST_APP_ID = '7A03A2F5';
 const isReceiverMode = /\bCrKey\b/i.test(navigator.userAgent) || new URL(location.href).searchParams.get('receiver') === '1';
 
 const appShell = document.getElementById('app-shell');
 const receiverShell = document.getElementById('receiver-shell');
-
 const form = document.getElementById('player-form');
 const urlInput = document.getElementById('youtube-url');
 const statusEl = document.getElementById('status');
@@ -19,30 +16,67 @@ const clearHistoryBtn = document.getElementById('clear-history-btn');
 const openYoutubeBtn = document.getElementById('open-youtube-btn');
 const copyLinkBtn = document.getElementById('copy-link-btn');
 const castCurrentBtn = document.getElementById('cast-current-btn');
-const castButton = document.getElementById('cast-button');
+const castLauncher = document.getElementById('cast-launcher');
 const castHelpBtn = document.getElementById('cast-help-btn');
 const castHelpDialog = document.getElementById('cast-help-dialog');
 const closeCastHelpBtn = document.getElementById('close-cast-help-btn');
-const receiverAppIdInput = document.getElementById('receiver-app-id');
-const saveCastIdBtn = document.getElementById('save-cast-id-btn');
-const clearCastIdBtn = document.getElementById('clear-cast-id-btn');
 const castStatePill = document.getElementById('cast-state-pill');
 const receiverWaitingEl = document.getElementById('receiver-waiting');
+const clearLogBtn = document.getElementById('clear-log-btn');
+
+const diagAppId = document.getElementById('diag-app-id');
+const diagSecure = document.getElementById('diag-secure');
+const diagPlatform = document.getElementById('diag-platform');
+const diagCastApi = document.getElementById('diag-cast-api');
+const diagBrowser = document.getElementById('diag-browser');
+const diagOnline = document.getElementById('diag-online');
+const diagCastState = document.getElementById('diag-cast-state');
+const diagSessionState = document.getElementById('diag-session-state');
+const diagPageMode = document.getElementById('diag-page-mode');
+const diagOrigin = document.getElementById('diag-origin');
+const diagLog = document.getElementById('diag-log');
 
 let player;
 let currentVideo = null;
 let youtubeReady = false;
 let castApiAvailable = false;
-let castListenersBound = false;
 let receiverPlayer;
 let receiverQueuedVideoId = null;
+let logLines = [];
+
+function nowStamp() {
+  return new Date().toLocaleTimeString();
+}
+
+function appendLog(message) {
+  const line = `[${nowStamp()}] ${message}`;
+  logLines.push(line);
+  if (logLines.length > 60) logLines = logLines.slice(-60);
+  if (diagLog) diagLog.textContent = logLines.join('\n');
+}
+
+function setText(el, text) {
+  if (el) el.textContent = text;
+}
+
+function setStatus(message, type = '') {
+  if (!statusEl) return;
+  statusEl.textContent = message;
+  statusEl.className = `status ${type}`.trim();
+  appendLog(`STATUS: ${message}`);
+}
+
+function setCastVisualState(kind, label) {
+  if (!castStatePill) return;
+  castStatePill.classList.remove('connecting', 'connected');
+  if (kind === 'connecting') castStatePill.classList.add('connecting');
+  if (kind === 'connected') castStatePill.classList.add('connected');
+  castStatePill.textContent = label;
+}
 
 function injectScript(src) {
   return new Promise((resolve, reject) => {
-    if ([...document.scripts].some((s) => s.src === src)) {
-      resolve();
-      return;
-    }
+    if ([...document.scripts].some((s) => s.src === src)) return resolve();
     const script = document.createElement('script');
     script.src = src;
     script.async = true;
@@ -52,102 +86,29 @@ function injectScript(src) {
   });
 }
 
-function sanitizeCastAppId(value) {
-  return (value || '').trim().toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 32);
-}
-
-function getSavedCastAppId() {
-  const saved = sanitizeCastAppId(localStorage.getItem(CAST_ID_KEY) || '');
-  return saved || DEFAULT_CAST_APP_ID;
-}
-
-function saveCastAppId(appId) {
-  localStorage.setItem(CAST_ID_KEY, appId);
-}
-
-function clearCastAppId() {
-  localStorage.removeItem(CAST_ID_KEY);
-}
-
-function ensureDefaultCastId() {
-  const existing = sanitizeCastAppId(localStorage.getItem(CAST_ID_KEY) || '');
-  if (!existing) {
-    saveCastAppId(DEFAULT_CAST_APP_ID);
-  }
-}
-
-function setStatus(message, type = '') {
-  if (!statusEl) return;
-  statusEl.textContent = message;
-  statusEl.className = `status ${type}`.trim();
-}
-
-function setCastVisualState(kind, label) {
-  if (!castButton || !castStatePill) return;
-  castButton.classList.remove('ready', 'connecting', 'connected');
-  castStatePill.classList.remove('connecting', 'connected');
-  castStatePill.textContent = label;
-
-  if (kind === 'ready') castButton.classList.add('ready');
-  if (kind === 'connecting') {
-    castButton.classList.add('connecting');
-    castStatePill.classList.add('connecting');
-  }
-  if (kind === 'connected') {
-    castButton.classList.add('connected');
-    castStatePill.classList.add('connected');
-  }
-}
-
 function parseYouTubeLink(rawValue) {
   if (!rawValue) return null;
-
   let url;
-  try {
-    url = new URL(rawValue.trim());
-  } catch {
-    return null;
-  }
-
+  try { url = new URL(rawValue.trim()); } catch { return null; }
   const hostname = url.hostname.replace(/^www\./, '');
   let videoId = '';
-
-  if (hostname === 'youtu.be') {
-    videoId = url.pathname.split('/').filter(Boolean)[0] || '';
-  } else if (hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'music.youtube.com') {
-    if (url.pathname === '/watch') {
-      videoId = url.searchParams.get('v') || '';
-    } else if (url.pathname.startsWith('/shorts/')) {
-      videoId = url.pathname.split('/')[2] || '';
-    } else if (url.pathname.startsWith('/live/')) {
-      videoId = url.pathname.split('/')[2] || '';
-    } else if (url.pathname.startsWith('/embed/')) {
-      videoId = url.pathname.split('/')[2] || '';
-    }
+  if (hostname === 'youtu.be') videoId = url.pathname.split('/').filter(Boolean)[0] || '';
+  else if (hostname === 'youtube.com' || hostname === 'm.youtube.com' || hostname === 'music.youtube.com') {
+    if (url.pathname === '/watch') videoId = url.searchParams.get('v') || '';
+    else if (url.pathname.startsWith('/shorts/') || url.pathname.startsWith('/live/') || url.pathname.startsWith('/embed/')) videoId = url.pathname.split('/')[2] || '';
   }
-
   videoId = videoId.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 15);
   if (!videoId || videoId.length < 6) return null;
-
-  return {
-    videoId,
-    canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`,
-    thumbUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-  };
+  return { videoId, canonicalUrl: `https://www.youtube.com/watch?v=${videoId}`, thumbUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg` };
 }
 
 function getHistory() {
-  try {
-    return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]');
-  } catch {
-    return [];
-  }
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || '[]'); } catch { return []; }
 }
 
 function saveToHistory(video) {
   const existing = getHistory().filter((item) => item.videoId !== video.videoId);
-  const next = [video, ...existing].slice(0, 8);
-  localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
+  localStorage.setItem(HISTORY_KEY, JSON.stringify([video, ...existing].slice(0, 8)));
   renderHistory();
 }
 
@@ -155,56 +116,25 @@ function renderHistory() {
   if (!historyList) return;
   const items = getHistory();
   historyList.innerHTML = '';
-
   if (!items.length) {
     historyList.innerHTML = '<p class="muted">No recent links yet.</p>';
     return;
   }
-
   items.forEach((item) => {
     const wrapper = document.createElement('div');
     wrapper.className = 'history-item';
-    wrapper.innerHTML = `
-      <img class="history-thumb" src="${item.thumbUrl}" alt="Thumbnail for ${item.videoId}" loading="lazy" />
-      <div class="history-meta">
-        <p class="history-title">Video ${item.videoId}</p>
-        <p class="history-url">${item.canonicalUrl}</p>
-      </div>
-      <button type="button" class="secondary-btn history-play-btn">Play</button>
-    `;
-
-    wrapper.querySelector('button').addEventListener('click', () => {
-      urlInput.value = item.canonicalUrl;
-      loadVideoFromInput();
-    });
-
+    wrapper.innerHTML = `<img class="history-thumb" src="${item.thumbUrl}" alt="Thumbnail for ${item.videoId}" loading="lazy" /><div class="history-meta"><p class="history-title">Video ${item.videoId}</p><p class="history-url">${item.canonicalUrl}</p></div><button type="button" class="secondary-btn history-play-btn">Play</button>`;
+    wrapper.querySelector('button').addEventListener('click', () => { urlInput.value = item.canonicalUrl; loadVideoFromInput(); });
     historyList.appendChild(wrapper);
   });
 }
 
 function ensurePlayer(videoId) {
-  if (!youtubeReady) {
-    setStatus('YouTube player is still loading. Try again in a moment.', 'error');
-    return;
-  }
-
+  if (!youtubeReady) return setStatus('YouTube player is still loading. Try again in a moment.', 'error');
   if (!player) {
-    player = new YT.Player('player', {
-      videoId,
-      playerVars: {
-        autoplay: 1,
-        rel: 0,
-        playsinline: 1,
-      },
-      events: {
-        onReady: () => {
-          placeholderEl.classList.add('hidden');
-        },
-      },
-    });
+    player = new YT.Player('player', { videoId, playerVars: { autoplay: 1, rel: 0, playsinline: 1 }, events: { onReady: () => placeholderEl.classList.add('hidden') } });
     return;
   }
-
   placeholderEl.classList.add('hidden');
   player.loadVideoById(videoId);
 }
@@ -220,15 +150,11 @@ function updateCurrentVideo(video) {
 
 function loadVideoFromInput() {
   const parsed = parseYouTubeLink(urlInput.value);
-  if (!parsed) {
-    setStatus('That does not look like a valid YouTube watch, shorts, live, embed, or youtu.be link.', 'error');
-    return;
-  }
-
+  if (!parsed) return setStatus('That does not look like a valid YouTube link.', 'error');
   ensurePlayer(parsed.videoId);
   updateCurrentVideo(parsed);
   saveToHistory(parsed);
-  setStatus('Video loaded. Tap the Cast icon to choose a device and send this video.', 'success');
+  setStatus('Video loaded. Use the Cast icon in desktop Chrome to connect to your TV.', 'success');
 }
 
 async function copyCurrentLink() {
@@ -242,191 +168,108 @@ async function copyCurrentLink() {
 }
 
 function openCurrentOnYouTube() {
-  if (!currentVideo) return;
-  window.open(currentVideo.canonicalUrl, '_blank', 'noopener');
+  if (currentVideo) window.open(currentVideo.canonicalUrl, '_blank', 'noopener');
 }
 
-function initCastContext(appId) {
-  if (!castApiAvailable || !appId || !window.cast?.framework || !window.chrome?.cast) return false;
-  const context = cast.framework.CastContext.getInstance();
+function updateDiagnosticsShell() {
+  setText(diagAppId, CAST_APP_ID);
+  setText(diagSecure, window.isSecureContext ? 'YES' : 'NO');
+  setText(diagOnline, navigator.onLine ? 'YES' : 'NO');
+  setText(diagOrigin, location.origin);
+  setText(diagPageMode, isReceiverMode ? 'RECEIVER' : 'SENDER');
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/i.test(ua);
+  const isAndroid = /Android/i.test(ua);
+  const isChromeLike = /Chrome|CriOS|Edg|OPR/i.test(ua);
+  const platformLabel = isIOS ? 'iPhone / iPad' : isAndroid ? 'Android' : 'Desktop';
+  setText(diagPlatform, platformLabel);
+  const browserLabel = isIOS ? 'Use native iOS Cast app, not web sender' : isChromeLike ? 'Chrome / Chromium-like' : 'Non-Chrome browser';
+  setText(diagBrowser, browserLabel);
+  appendLog(`Environment: ${platformLabel}, secure=${window.isSecureContext}, online=${navigator.onLine}`);
+}
 
-  context.setOptions({
-    receiverApplicationId: appId,
+function initCastContext() {
+  if (!window.cast?.framework || !window.chrome?.cast) return false;
+  cast.framework.CastContext.getInstance().setOptions({
+    receiverApplicationId: CAST_APP_ID,
     autoJoinPolicy: chrome.cast.AutoJoinPolicy.ORIGIN_SCOPED,
     resumeSavedSession: true,
   });
+  setText(diagCastApi, 'READY');
+  castLauncher.classList.remove('hidden');
+  castLauncher.style.display = 'grid';
+  appendLog(`Cast SDK ready with App ID ${CAST_APP_ID}`);
+  const context = cast.framework.CastContext.getInstance();
+  context.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, (event) => {
+    const state = event.castState || 'UNKNOWN';
+    setText(diagCastState, state);
+    if (state === cast.framework.CastState.NO_DEVICES_AVAILABLE) {
+      setCastVisualState('ready', 'No devices found');
+      setStatus('Chrome loaded Cast, but it cannot currently discover any Cast devices on this network.', 'error');
+    } else if (state === cast.framework.CastState.CONNECTING) {
+      setCastVisualState('connecting', 'Connecting');
+    } else if (state === cast.framework.CastState.CONNECTED) {
+      const deviceName = context.getCurrentSession()?.getCastDevice?.().friendlyName || 'Connected';
+      setCastVisualState('connected', deviceName);
+    } else {
+      setCastVisualState('ready', 'Ready to cast');
+    }
+    appendLog(`CAST_STATE_CHANGED: ${state}`);
+  });
 
-  if (!castListenersBound) {
-    castListenersBound = true;
-
-    context.addEventListener(cast.framework.CastContextEventType.CAST_STATE_CHANGED, (event) => {
-      const state = event.castState;
-      if (state === cast.framework.CastState.NO_DEVICES_AVAILABLE) {
-        setCastVisualState('ready', 'No devices found');
-      } else if (state === cast.framework.CastState.CONNECTING) {
-        setCastVisualState('connecting', 'Connecting');
-      } else if (state === cast.framework.CastState.CONNECTED) {
-        const session = context.getCurrentSession();
-        const deviceName = session?.getCastDevice?.().friendlyName || 'Connected';
-        setCastVisualState('connected', deviceName);
-      } else {
-        setCastVisualState('ready', 'Ready to cast');
-      }
-    });
-
-    context.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, (event) => {
-      if (event.sessionState === cast.framework.SessionState.SESSION_STARTED || event.sessionState === cast.framework.SessionState.SESSION_RESUMED) {
-        const deviceName = event.session?.getCastDevice?.().friendlyName || 'Connected';
-        setCastVisualState('connected', deviceName);
-        setStatus(`Connected to ${deviceName}.`, 'success');
-        if (currentVideo) sendVideoToReceiver(currentVideo);
-      }
-
-      if (event.sessionState === cast.framework.SessionState.SESSION_START_FAILED) {
-        setCastVisualState('ready', 'Ready to cast');
-        setStatus('The Cast session could not start. If your receiver is unpublished, add your TV or Chromecast as an authorized device, wait 5–15 minutes, reboot it, then try again in desktop Chrome.', 'error');
-      }
-
-      if (event.sessionState === cast.framework.SessionState.SESSION_ENDED) {
-        setCastVisualState('ready', 'Ready to cast');
-        setStatus('Cast session ended.', '');
-      }
-    });
-  }
-
-  setCastVisualState('ready', 'Ready to cast');
+  context.addEventListener(cast.framework.CastContextEventType.SESSION_STATE_CHANGED, (event) => {
+    const sessionState = event.sessionState || 'UNKNOWN';
+    setText(diagSessionState, sessionState);
+    appendLog(`SESSION_STATE_CHANGED: ${sessionState}`);
+    if (sessionState === cast.framework.SessionState.SESSION_STARTED || sessionState === cast.framework.SessionState.SESSION_RESUMED) {
+      const deviceName = event.session?.getCastDevice?.().friendlyName || 'Connected';
+      setCastVisualState('connected', deviceName);
+      setStatus(`Connected to ${deviceName}.`, 'success');
+      if (currentVideo) sendVideoToReceiver(currentVideo);
+    }
+    if (sessionState === cast.framework.SessionState.SESSION_START_FAILED) {
+      setStatus('Cast session failed to start. Recheck the TV registration serial, same-Wi-Fi network, and whether you are testing from desktop Chrome.', 'error');
+    }
+  });
   return true;
 }
 
 function sendVideoToReceiver(video) {
-  const appId = getSavedCastAppId();
-  if (!appId) {
-    setStatus('Save your Cast receiver app ID first in the Cast setup section.', 'error');
-    receiverAppIdInput.focus();
-    return;
+  if (!castApiAvailable || !window.cast?.framework) {
+    return setStatus('Cast is not available in this browser/device.', 'error');
   }
-
-  if (!castApiAvailable || !initCastContext(appId)) {
-    setStatus('Cast is not available here. Open this site in desktop Chrome on HTTPS, or use the native Android/iPhone version for phone casting.', 'error');
-    return;
-  }
-
   const session = cast.framework.CastContext.getInstance().getCurrentSession();
   if (!session) {
-    setStatus('Pick a device from the Cast icon first.', 'error');
-    return;
+    setStatus('Use the Cast icon first to connect to your TV.', 'error');
+    return cast.framework.CastContext.getInstance().requestSession().catch(() => appendLog('requestSession() was cancelled or failed'));
   }
-
-  session.sendMessage(CAST_NAMESPACE, {
-    type: 'LOAD_YOUTUBE',
-    videoId: video.videoId,
-    originalUrl: video.canonicalUrl,
-  }).then(() => {
+  session.sendMessage(CAST_NAMESPACE, { type: 'LOAD_YOUTUBE', videoId: video.videoId, originalUrl: video.canonicalUrl }).then(() => {
     const deviceName = session?.getCastDevice?.().friendlyName || 'your device';
     setStatus(`Casting video ${video.videoId} to ${deviceName}.`, 'success');
   }).catch(() => {
-    setStatus('Connected, but the receiver did not accept the video. Check the receiver URL, app ID, and unpublished-device authorization.', 'error');
+    setStatus('Connected, but the receiver did not accept the video. That usually means the TV registration or receiver launch is still not correct.', 'error');
   });
-}
-
-async function openDeviceChooserAndCast() {
-  const appId = getSavedCastAppId();
-  if (!appId) {
-    setStatus('Save your Cast receiver app ID first in the Cast setup section.', 'error');
-    receiverAppIdInput.focus();
-    return;
-  }
-
-  if (!castApiAvailable || !initCastContext(appId)) {
-    setStatus('Cast chooser is unavailable here. Open this site in desktop Chrome on HTTPS. On iPhone or iPad, use the native app version instead of the web page.', 'error');
-    return;
-  }
-
-  const context = cast.framework.CastContext.getInstance();
-  const existingSession = context.getCurrentSession();
-  if (existingSession) {
-    if (currentVideo) {
-      sendVideoToReceiver(currentVideo);
-    } else {
-      setStatus('Connected to a Cast device. Play a video first to send it.', '');
-    }
-    return;
-  }
-
-  try {
-    setCastVisualState('connecting', 'Opening devices');
-    await context.requestSession();
-    if (!currentVideo) {
-      setStatus('Device selected. Now play or load a video and tap Cast again.', 'success');
-    }
-  } catch {
-    setCastVisualState('ready', 'Ready to cast');
-    setStatus('No device was selected, or the Cast chooser could not open here. Try again in desktop Chrome on the same Wi‑Fi as the TV/Chromecast.', 'error');
-  }
 }
 
 function bindSenderEvents() {
-  form.addEventListener('submit', (event) => {
-    event.preventDefault();
-    loadVideoFromInput();
-  });
-
+  form.addEventListener('submit', (event) => { event.preventDefault(); loadVideoFromInput(); });
   openYoutubeBtn.addEventListener('click', openCurrentOnYouTube);
   copyLinkBtn.addEventListener('click', copyCurrentLink);
   castCurrentBtn.addEventListener('click', () => {
-    if (!currentVideo) {
-      setStatus('Play a video first, then cast it.', 'error');
-      return;
-    }
-    openDeviceChooserAndCast();
+    if (!currentVideo) return setStatus('Play a video first, then cast it.', 'error');
+    sendVideoToReceiver(currentVideo);
   });
-  castButton.addEventListener('click', openDeviceChooserAndCast);
-  clearHistoryBtn.addEventListener('click', () => {
-    localStorage.removeItem(HISTORY_KEY);
-    renderHistory();
-    setStatus('Recent links cleared.', 'success');
-  });
+  clearHistoryBtn.addEventListener('click', () => { localStorage.removeItem(HISTORY_KEY); renderHistory(); setStatus('Recent links cleared.', 'success'); });
+  clearLogBtn.addEventListener('click', () => { logLines = []; diagLog.textContent = ''; appendLog('Diagnostics log cleared'); });
   castHelpBtn.addEventListener('click', () => castHelpDialog.showModal());
   closeCastHelpBtn.addEventListener('click', () => castHelpDialog.close());
-
-  saveCastIdBtn.addEventListener('click', () => {
-    const appId = sanitizeCastAppId(receiverAppIdInput.value);
-    if (!appId) {
-      setStatus('Enter a valid Cast receiver app ID first.', 'error');
-      receiverAppIdInput.focus();
-      return;
-    }
-    receiverAppIdInput.value = appId;
-    saveCastAppId(appId);
-    if (castApiAvailable) initCastContext(appId);
-    setStatus('Cast receiver app ID saved. Tap the Cast icon to choose a device.', 'success');
-  });
-
-  clearCastIdBtn.addEventListener('click', () => {
-    clearCastAppId();
-    receiverAppIdInput.value = DEFAULT_CAST_APP_ID;
-    saveCastAppId(DEFAULT_CAST_APP_ID);
-    if (castApiAvailable) initCastContext(DEFAULT_CAST_APP_ID);
-    setStatus('Cast receiver app ID reset to the default app ID.', 'success');
-  });
-}
-
-function setupSenderUi() {
-  ensureDefaultCastId();
-  receiverAppIdInput.value = getSavedCastAppId();
-  copyLinkBtn.disabled = true;
-  castCurrentBtn.disabled = true;
-  renderHistory();
-  setCastVisualState('ready', 'Loading Cast');
+  window.addEventListener('online', () => setText(diagOnline, 'YES'));
+  window.addEventListener('offline', () => setText(diagOnline, 'NO'));
 }
 
 function loadYouTubeApiForSender() {
   return new Promise((resolve, reject) => {
-    window.onYouTubeIframeAPIReady = function () {
-      youtubeReady = true;
-      setStatus('Paste a valid YouTube link to begin.', '');
-      resolve();
-    };
+    window.onYouTubeIframeAPIReady = function () { youtubeReady = true; setStatus('Paste a valid YouTube link to begin.', ''); appendLog('YouTube sender API ready'); resolve(); };
     injectScript('https://www.youtube.com/iframe_api').catch(reject);
   });
 }
@@ -435,26 +278,19 @@ function loadCastSenderApi() {
   return new Promise((resolve, reject) => {
     window.__onGCastApiAvailable = function (isAvailable) {
       castApiAvailable = Boolean(isAvailable);
-      if (castApiAvailable) {
-        initCastContext(getSavedCastAppId());
-        resolve();
-      } else {
-        setCastVisualState('ready', 'Cast unavailable');
-        setStatus('The Cast SDK loaded, but Cast support is not available in this browser/device. Use desktop Chrome or the native mobile app.', 'error');
-        resolve();
-      }
+      setText(diagCastApi, castApiAvailable ? 'LOADED' : 'UNAVAILABLE');
+      appendLog(`__onGCastApiAvailable: ${castApiAvailable}`);
+      if (castApiAvailable) initCastContext();
+      else setStatus('The Cast SDK loaded, but Cast support is unavailable in this browser/device.', 'error');
+      resolve();
     };
-
     injectScript('https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1').catch(reject);
   });
 }
 
 function loadYouTubeApiForReceiver() {
   return new Promise((resolve, reject) => {
-    window.onYouTubeIframeAPIReady = function () {
-      youtubeReady = true;
-      resolve();
-    };
+    window.onYouTubeIframeAPIReady = function () { youtubeReady = true; resolve(); };
     injectScript('https://www.youtube.com/iframe_api').catch(reject);
   });
 }
@@ -464,44 +300,25 @@ function loadReceiverScript() {
 }
 
 function loadVideoOnReceiver(videoId) {
-  if (!youtubeReady) {
-    receiverQueuedVideoId = videoId;
-    return;
-  }
-
+  if (!youtubeReady) { receiverQueuedVideoId = videoId; return; }
   receiverWaitingEl.classList.add('hidden');
-
   if (!receiverPlayer) {
-    receiverPlayer = new YT.Player('receiver-player', {
-      videoId,
-      playerVars: {
-        autoplay: 1,
-        controls: 1,
-        rel: 0,
-      },
-    });
+    receiverPlayer = new YT.Player('receiver-player', { videoId, playerVars: { autoplay: 1, controls: 1, rel: 0 } });
     return;
   }
-
   receiverPlayer.loadVideoById(videoId);
 }
 
 function initReceiverMode() {
   appShell.classList.add('hidden');
   receiverShell.classList.remove('hidden');
-
   const context = cast.framework.CastReceiverContext.getInstance();
   context.addCustomMessageListener(CAST_NAMESPACE, (event) => {
     const data = event.data || {};
-    if (data.type === 'LOAD_YOUTUBE' && data.videoId) {
-      loadVideoOnReceiver(data.videoId);
-    }
+    if (data.type === 'LOAD_YOUTUBE' && data.videoId) loadVideoOnReceiver(data.videoId);
   });
   context.start();
-
-  if (receiverQueuedVideoId) {
-    loadVideoOnReceiver(receiverQueuedVideoId);
-  }
+  if (receiverQueuedVideoId) loadVideoOnReceiver(receiverQueuedVideoId);
 }
 
 async function start() {
@@ -517,8 +334,12 @@ async function start() {
     return;
   }
 
-  setupSenderUi();
+  updateDiagnosticsShell();
+  renderHistory();
   bindSenderEvents();
+  copyLinkBtn.disabled = true;
+  castCurrentBtn.disabled = true;
+  setCastVisualState('ready', 'Loading');
 
   try {
     await loadYouTubeApiForSender();
@@ -529,7 +350,7 @@ async function start() {
   try {
     await loadCastSenderApi();
   } catch {
-    setCastVisualState('ready', 'Cast unavailable');
+    setText(diagCastApi, 'FAILED');
     setStatus('Could not load the Cast SDK. Reload the page or try again in desktop Chrome.', 'error');
   }
 }
